@@ -7,7 +7,7 @@ from pydantic import BaseModel
 from dotenv import load_dotenv
 from brain import analyze_message
 
-# 1. SETUP & LOGGING (The "Wow" Factor: Real-time threat tracking)
+# 1. SETUP & LOGGING
 load_dotenv()
 logging.basicConfig(
     level=logging.INFO, 
@@ -53,16 +53,18 @@ def health():
     }
 
 @app.post("/test-honeypot")
-async def evaluate(request: ScamRequest, x_api_key: str = Header(None)):
+async def evaluate(payload: ScamRequest, request: Request, x_api_key: str = Header(None)):
     # AUTHENTICATION
     EXPECTED_KEY = os.getenv("MY_HONEYPOT_KEY")
     if not x_api_key or x_api_key != EXPECTED_KEY:
+        # Fixed: Now uses the actual request object for the IP
         logger.warning(f"Unauthorized access attempt from {request.client.host}")
         raise HTTPException(status_code=401, detail="Unauthorized: Invalid API Key")
 
     # INTELLIGENCE GATHERING
     try:
-        intelligence = await analyze_message(request.message)
+        # Fixed: Passing the message from the payload
+        intelligence = await analyze_message(payload.message)
         
         # FINAL WINNING RESPONSE
         return {
