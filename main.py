@@ -3,7 +3,7 @@ import time
 import logging
 from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.responses import ORJSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, AliasChoices
 from dotenv import load_dotenv
 from brain import analyze_message
 
@@ -21,8 +21,9 @@ app = FastAPI(
     default_response_class=ORJSONResponse
 )
 
+# RECTIFIED: This model now accepts 'message', 'scam_message', OR 'text'
 class ScamRequest(BaseModel):
-    message: str
+    message: str = Field(validation_alias=AliasChoices('message', 'scam_message', 'text'))
 
 # 2. MIDDLEWARE: Performance & Forensic Tracking
 @app.middleware("http")
@@ -31,14 +32,10 @@ async def add_security_headers(request: Request, call_next):
     response = await call_next(request)
     process_time = time.perf_counter() - start_time
     
-    # Log the interaction for forensic analysis
     logger.info(
-        f"IP: {request.client.host} | "
-        f"Path: {request.url.path} | "
-        f"Processing: {process_time:.4f}s"
+        f"IP: {request.client.host} | Path: {request.url.path} | Processing: {process_time:.4f}s"
     )
     
-    # Add a custom header to show off performance
     response.headers["X-Shield-Latency"] = f"{process_time:.4f}s"
     return response
 
@@ -57,16 +54,13 @@ async def evaluate(payload: ScamRequest, request: Request, x_api_key: str = Head
     # AUTHENTICATION
     EXPECTED_KEY = os.getenv("MY_HONEYPOT_KEY")
     if not x_api_key or x_api_key != EXPECTED_KEY:
-        # Fixed: Now uses the actual request object for the IP
         logger.warning(f"Unauthorized access attempt from {request.client.host}")
         raise HTTPException(status_code=401, detail="Unauthorized: Invalid API Key")
 
     # INTELLIGENCE GATHERING
     try:
-        # Fixed: Passing the message from the payload
         intelligence = await analyze_message(payload.message)
         
-        # FINAL WINNING RESPONSE
         return {
             "status": "success",
             "reachable": True,
