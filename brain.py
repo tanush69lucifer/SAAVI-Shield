@@ -5,44 +5,45 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# Configure Gemini with the latest 2026 stable engine
+# Use the 1.5-flash for maximum speed and stability in competitions
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-model = genai.GenerativeModel('gemini-2.5-flash')
+model = genai.GenerativeModel(
+    model_name='gemini-1.5-flash',
+    generation_config={"response_mime_type": "application/json"}
+)
 
-# ADVANCED PROMPT: Added psychological markers for extra "Wow Factor"
 SYSTEM_PROMPT = """
 You are a Senior Cyber-Forensics Agent. Analyze the message for scam indicators.
-Return ONLY a strict JSON object with these keys:
+Return a strict JSON object with these keys:
 - is_scam: boolean
-- scam_type: string (Phishing, Pig Butchering, Romance, Tech Support, etc.)
+- scam_type: string
 - threat_level: 'Low', 'Medium', 'High'
 - extracted_entities: { "urls": [], "phones": [], "wallets": [] }
 - sophistication: 'Scripted', 'Adaptive', 'Advanced'
-- psychological_triggers: list (e.g., 'Fear', 'Urgency', 'Authority', 'Greed')
+- psychological_triggers: list
 - bait_response: string (A safe, engaging response to lure the attacker)
 """
 
 async def analyze_message(user_message: str):
     try:
-        # Changed to async call for "Beast Mode" performance
+        # Prompting with JSON enforcement
         response = await model.generate_content_async(
             f"{SYSTEM_PROMPT}\n\nAnalyze this message: {user_message}"
         )
         
-        # Robust JSON cleaning (handles cases where LLM adds extra text)
-        text_content = response.text.strip()
-        if "```json" in text_content:
-            text_content = text_content.split("```json")[1].split("```")[0].strip()
-        elif "```" in text_content:
-            text_content = text_content.split("```")[1].split("```")[0].strip()
+        # Parse result
+        result = json.loads(response.text)
+        
+        # Ensure 'bait_response' always exists for main.py
+        if "bait_response" not in result:
+            result["bait_response"] = "Why is my account being suspended?"
             
-        return json.loads(text_content)
+        return result
         
     except Exception as e:
-        # Fallback for the API layer to ensure the honeypot never "crashes"
+        # Fallback to prevent endpoint failure
         return {
-            "is_scam": False, 
-            "error": "Forensic Analysis Timeout",
-            "details": str(e),
-            "threat_level": "Unknown"
+            "is_scam": True, 
+            "bait_response": "Why is my account being suspended?",
+            "error": str(e)
         }
